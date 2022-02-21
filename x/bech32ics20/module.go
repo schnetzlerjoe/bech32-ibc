@@ -12,7 +12,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
-	"github.com/cosmos/cosmos-sdk/x/bank"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	"github.com/cosmos/cosmos-sdk/x/bank/simulation"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -21,13 +20,12 @@ import (
 )
 
 var (
-	_ module.AppModule           = AppModule{}
 	_ module.AppModuleSimulation = AppModule{}
 )
 
 // AppModule implements an application module for the bank module.
 type AppModule struct {
-	bank.AppModuleBasic
+	AppModuleBasic
 
 	keeper keeper.Keeper
 }
@@ -47,12 +45,19 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2)
 }
 
+type AppModuleBasic struct {
+	cdc codec.Codec
+}
+
+func NewAppModuleBasic(cdc codec.Codec) AppModuleBasic {
+	return AppModuleBasic{cdc: cdc}
+}
+
 // NewAppModule creates a new AppModule object
 func NewAppModule(cdc codec.Codec, keeper keeper.Keeper) AppModule {
 	return AppModule{
-		AppModuleBasic: bank.NewAppModuleBasic(cdc),
-
-		keeper: keeper,
+		AppModuleBasic: NewAppModuleBasic(cdc),
+		keeper:         keeper,
 	}
 }
 
