@@ -2,12 +2,18 @@ package bech32ics20
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"time"
 
+	"github.com/gorilla/mux"
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/cobra"
 	abci "github.com/tendermint/tendermint/abci/types"
 
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
+	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
@@ -16,10 +22,14 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank/simulation"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
 
+	"github.com/osmosis-labs/bech32-ibc/x/bech32ibc/client/cli"
+	"github.com/osmosis-labs/bech32-ibc/x/bech32ibc/client/rest"
 	"github.com/osmosis-labs/bech32-ibc/x/bech32ics20/keeper"
+	bechtypes "github.com/osmosis-labs/bech32-ibc/x/bech32ibc/types"
 )
 
 var (
+	_ module.AppModule           = AppModule{}
 	_ module.AppModuleSimulation = AppModule{}
 )
 
@@ -43,6 +53,11 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 		m = bankkeeper.NewMigrator(am.keeper.Keeper.(bankkeeper.BaseKeeper))
 	}
 	cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2)
+}
+
+// DefaultGenesis returns the capability module's default genesis state.
+func (AppModule) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
+	return nil
 }
 
 type AppModuleBasic struct {
@@ -69,6 +84,25 @@ func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
 	bankkeeper.RegisterInvariants(ir, am.keeper.Keeper)
 }
 
+// GetQueryCmd returns the capability module's root query command.
+func (AppModule) GetQueryCmd() *cobra.Command {
+	return cli.GetQueryCmd(types.StoreKey)
+}
+
+// GetTxCmd returns the capability module's root tx command.
+func (a AppModule) GetTxCmd() *cobra.Command {
+	return cli.NewTxCmd()
+}
+
+// RegisterRESTRoutes registers the capability module's REST service handlers.
+func (AppModule) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Router) {
+	rest.RegisterRoutes(clientCtx, rtr)
+}
+
+// RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the module.
+func (AppModule) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
+}
+
 // Route returns the message routing key for the bank module.
 func (am AppModule) Route() sdk.Route {
 	return sdk.NewRoute(types.RouterKey, NewHandler(am.keeper))
@@ -80,6 +114,28 @@ func (AppModule) QuerierRoute() string { return types.RouterKey }
 // LegacyQuerierHandler returns the bank module sdk.Querier.
 func (am AppModule) LegacyQuerierHandler(legacyQuerierCdc *codec.LegacyAmino) sdk.Querier {
 	return bankkeeper.NewQuerier(am.keeper, legacyQuerierCdc)
+}
+
+// ValidateGenesis performs genesis state validation for the capability module.
+func (AppModule) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
+	var genState types.GenesisState
+	if err := cdc.UnmarshalJSON(bz, &genState); err != nil {
+		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
+	}
+	return genState.Validate()
+}
+
+// RegisterInterfaces registers the module's interface types
+func (a AppModule) RegisterInterfaces(reg cdctypes.InterfaceRegistry) {
+	types.RegisterInterfaces(reg)
+}
+
+func (AppModule) RegisterCodec(cdc *codec.LegacyAmino) {
+	bechtypes.RegisterCodec(cdc)
+}
+
+func (AppModule) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	bechtypes.RegisterCodec(cdc)
 }
 
 // InitGenesis performs genesis initialization for the bech32ics20 module. It returns
